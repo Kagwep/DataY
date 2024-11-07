@@ -1,0 +1,42 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "import", "sonarjs", "cypress", "react"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "project": "./tsconfig.eslint.json",
+    "sourceType": "module"
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "airbnb-typescript",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:sonarjs/recommended-legacy",
+    "prettier"
+  ],
+  "rules": {
+    "no-console": "off",
+    "react/react-in-jsx-scope": "off",
+    // Already using TypeScript. Not sure we should also do runtime props validation, disabling this rule for now
+    "react/prop-types": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/ban-ts-comment": "warn",
+    "@typescript-eslint/no-use-before-define": ["error", { "functions": false }],
+    "sonarjs/cognitive-complexity": "warn",
+    "sonarjs/prefer-immediate-return": "off"
+  },
+  "env": {
+    "cypress/globals": true
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    },
+    "import/resolver": {
+      "alias": {
+        "map": [["@", "./src"]]
+      }
+    }
+  }
+}

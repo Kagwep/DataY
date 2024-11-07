@@ -1,19 +1,29 @@
+
+import Navbar from '@/components/NavBar/Navbar';
+import LoginGuard from '@/features/loginGuard/LoginGuard.tsx';
+import MyProtectedData from '@/features/myProtectedData/MyProtectedData.tsx';
+import CreateProtectedData from '@/features/myProtectedData/createProtectedData/CreateProtectedData.tsx';
+import OneProtectedData from '@/features/myProtectedData/oneProtectedData/OneProtectedData.tsx';
+import MyEmailContacts from '@/features/sendEmail/MyEmailContacts.tsx';
+import SendEmailForm from '@/features/sendEmail/SendEmailForm.tsx';
+import { useWatchWagmiAccount } from '@/utils/watchWagmiAccount.ts';
 import { SetStateAction, useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
-import './App.css'
-import SurveyBuilder from './componets/SurveyBuilder'
+import SurveyBuilder from './components/SurveyBuilder'
 import { FormResponse, FormStructure } from './types'
-import FormRenderer from './componets/FormRenderer'
+import FormRenderer from './components/FormRenderer'
 import HomePage from './pages/Home'
-import Navbar from './componets/Navbar'
-import Footer from './componets/Footer'
+import Footer from './components/Footer'
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import MarketplacePage from './pages/MarketplacePage';
-import EarnPage from './componets/EarnPage';
+import EarnPage from './components/EarnPage';
 import SurveysPage from './pages/SurveysPage'
 import ImageAnnotationPage from './pages/Annotate'
 import AnnotationMarketplacePage from './pages/Annotation'
+import UserProfilePage from './pages/UsersPage';
+
+
 
 const Layout = ({ children }: {children: any}) => {
   return (
@@ -29,6 +39,8 @@ const Layout = ({ children }: {children: any}) => {
 
 
 function App() {
+
+  useWatchWagmiAccount();
 
   const handleFormSubmit = (response: FormResponse) => {
     console.log('Form Response:', response);
@@ -132,10 +144,37 @@ const renderContent = () => {
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/marketplace" element={<MarketplacePage />} />
-          <Route path="/surveys" element={<SurveysPage />} />
-          <Route path="/earn" element={<EarnPage />} />
-          <Route path="/annotation" element={<AnnotationMarketplacePage />} />
+          <Route path="/marketplace"
+           element={
+            <LoginGuard>
+            <MarketplacePage />  
+            </LoginGuard>
+            } />
+          <Route path="/surveys" element={
+            <LoginGuard>
+            <SurveysPage />
+            </LoginGuard>
+            } />
+          <Route path="/earn" element={
+            <LoginGuard>
+            <EarnPage />
+            </LoginGuard>
+            } />
+          <Route path="/annotation" element={
+            <LoginGuard>
+            <AnnotationMarketplacePage />
+            </LoginGuard>
+            } />
+          <Route path="/profile" element={
+            <LoginGuard>
+            <UserProfilePage />
+            </LoginGuard>
+            } />
+          <Route path="/surveys/create-survey" element={
+            <LoginGuard>
+            <SurveyBuilder />
+            </LoginGuard>
+            } />
           <Route path="*" element={
             <div className="min-h-screen flex items-center justify-center">
               <div className="text-center">
@@ -156,3 +195,62 @@ const renderContent = () => {
 }
 
 export default App
+
+
+// function App() {
+//   useWatchWagmiAccount();
+
+//   return (
+//     <div className="App">
+//       <NavBar />
+//       <div className="mx-auto mt-12 w-[80%] max-w-6xl">
+//         <Routes>
+//           <Route
+//             path="protectedData"
+//             element={
+//               <LoginGuard>
+//                 <MyProtectedData />
+//               </LoginGuard>
+//             }
+//           />
+//           <Route
+//             path="/protectedData/consent/:protectedDataAddress"
+//             element={
+//               <LoginGuard>
+//                 <OneProtectedData />
+//               </LoginGuard>
+//             }
+//           />
+//           <Route
+//             path="/protectedData/create"
+//             element={
+//               <LoginGuard>
+//                 <CreateProtectedData />
+//               </LoginGuard>
+//             }
+//           />
+//           <Route
+//             path="sendEmail"
+//             element={
+//               <LoginGuard>
+//                 <MyEmailContacts />
+//               </LoginGuard>
+//             }
+//           />
+//           <Route
+//             path="/sendEmail/:receiverAddress/:protectedDataAddress"
+//             element={
+//               <LoginGuard>
+//                 <SendEmailForm />
+//               </LoginGuard>
+//             }
+//           />
+//           {/* default redirect */}
+//           <Route path="*" element={<Navigate to="protectedData" />} />
+//         </Routes>
+//       </div>
+//     </div>
+//   );
+// }
+
+// export default App;

@@ -21,4 +21,15 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+./.env
 *.sw?
+
+cypress/screenshots
+cypress/videos
+
+stats.html
+save_stats/
+
+.vercel
+
+.vercel

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Search, Filter, Tag, Clock, Database, DollarSign, Star, Shield } from 'lucide-react';
+import AddDataModal, { NewDataListing } from '@/components/DataModal';
 
 const MarketplacePage = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Mock data categories
   const categories = [
@@ -14,6 +16,12 @@ const MarketplacePage = () => {
     { id: 'retail', name: 'Retail', count: 28 },
     { id: 'social', name: 'Social Media', count: 51 }
   ];
+
+  const handleAddData = async (data: NewDataListing) => {
+    // Handle data submission to smart contract
+    // Upload file to IPFS or other storage
+    // Update marketplace state
+  };
 
   // Mock data listings
   const dataListings = [
@@ -73,7 +81,10 @@ const MarketplacePage = () => {
               </p>
             </div>
             <div className="mt-4 flex md:mt-0 md:ml-4">
-              <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+              <button 
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              onClick={() => setIsModalOpen(true)}
+              >
                 <Database className="h-4 w-4 mr-2" />
                 List Your Data
               </button>
@@ -228,6 +239,11 @@ const MarketplacePage = () => {
           </div>
         </div>
       </div>
+      <AddDataModal 
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+      onSubmit={handleAddData}
+    />
     </div>
   );
 };

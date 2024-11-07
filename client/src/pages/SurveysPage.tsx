@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Plus
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const SurveysPage = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -183,13 +184,14 @@ const SurveysPage = () => {
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-4 w-full sm:w-auto">
                   <h2 className="text-xl font-bold text-gray-900">Available Surveys</h2>
+                  <Link to="create-survey">
                   <button 
                     className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-                    onClick={() => {/* Add your create survey handler here */}}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Survey
                   </button>
+                  </Link>
                 </div>
                 <select
                   value={sortBy}
