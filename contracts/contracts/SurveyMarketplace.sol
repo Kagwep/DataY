@@ -7,27 +7,47 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract SurveyMarketplace is Ownable, ReentrancyGuard {
     
+    // Break down Survey into smaller components
+    struct SurveyMetadata {
+        string title;
+        string category;
+        string description;
+        string[] requirements;
+        uint256 timeEstimate; // in minutes
+    }
+
+    struct SurveyFinancials {
+        uint256 rewardPerResponse; // in Wei
+        uint256 budget; // Total budget in Wei
+        uint256 remainingBudget;
+    }
+
+    struct SurveyStats {
+        uint256 participantsNeeded;
+        uint256 participantsCompleted;
+        uint256 deadline;
+        bool verified;
+        bool urgent;
+        bool active;
+    }
 
     struct Survey {
         uint256 id;
         address creator;
-        string title;
-        string category;
-        uint256 rewardPerResponse; // in Wei
-        uint256 timeEstimate; // in minutes
-        uint256 participantsNeeded;
-        uint256 participantsCompleted;
-        uint256 deadline;
-        string description;
-        string[] requirements;
-        bool verified;
-        bool urgent;
-        bool active;
-        uint256 budget; // Total budget in Wei
-        uint256 remainingBudget;
+        SurveyMetadata metadata;
+        SurveyFinancials financials;
+        SurveyStats stats;
         mapping(address => bool) respondents;
         mapping(address => bool) approvedResponses;
         mapping(address => bool) claimedRewards;
+    }
+
+    // Input struct for creating surveys
+    struct CreateSurveyParams {
+        SurveyMetadata metadata;
+        uint256 rewardPerResponse;
+        uint256 participantsNeeded;
+        uint256 deadline;
     }
 
     struct Category {
@@ -37,13 +57,22 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         bool active;
     }
 
-    struct UserStats {
-        uint256 totalEarned;
+    // Break down UserStats into components
+    struct UserActivity {
         uint256 surveysCompleted;
         uint256 activeStreak;
-        string rank;
-        uint256 pendingRewards;
         uint256 lastResponseTime;
+    }
+
+    struct UserRewards {
+        uint256 totalEarned;
+        uint256 pendingRewards;
+        string rank;
+    }
+
+    struct UserStats {
+        UserActivity activity;
+        UserRewards rewards;
     }
 
     // State variables
@@ -75,14 +104,13 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
     }
 
     modifier surveyActive(uint256 _surveyId) {
-        require(surveys[_surveyId].active, "Survey is not active");
-        require(block.timestamp < surveys[_surveyId].deadline, "Survey deadline passed");
-        require(surveys[_surveyId].participantsCompleted < surveys[_surveyId].participantsNeeded, "Survey full");
+        require(surveys[_surveyId].stats.active, "Survey is not active");
+        require(block.timestamp < surveys[_surveyId].stats.deadline, "Survey deadline passed");
+        require(surveys[_surveyId].stats.participantsCompleted < surveys[_surveyId].stats.participantsNeeded, "Survey full");
         _;
     }
 
     constructor() Ownable(msg.sender) ReentrancyGuard() {
-        // Initialize categories
         _addCategory("all", "All Surveys");
         _addCategory("market", "Market Research");
         _addCategory("product", "Product Feedback");
@@ -90,47 +118,46 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         _addCategory("user", "User Experience");
     }
 
-    function createSurvey(
-        string memory _title,
-        string memory _category,
-        uint256 _rewardPerResponse,
-        uint256 _timeEstimate,
-        uint256 _participantsNeeded,
-        uint256 _deadline,
-        string memory _description,
-        string[] memory _requirements
-    ) external payable {
-        require(bytes(_title).length > 0, "Title required");
-        require(_participantsNeeded > 0, "Need participants");
-        require(_rewardPerResponse > 0, "Reward required");
-        require(msg.value >= _rewardPerResponse * _participantsNeeded, "Insufficient budget");
+    function createSurvey(CreateSurveyParams calldata params) external payable {
+        require(bytes(params.metadata.title).length > 0, "Title required");
+        require(params.participantsNeeded > 0, "Need participants");
+        require(params.rewardPerResponse > 0, "Reward required");
+        require(msg.value >= params.rewardPerResponse * params.participantsNeeded, "Insufficient budget");
 
         uint256 surveyId = nextSurveyId++;
         Survey storage newSurvey = surveys[surveyId];
         
         newSurvey.id = surveyId;
         newSurvey.creator = msg.sender;
-        newSurvey.title = _title;
-        newSurvey.category = _category;
-        newSurvey.rewardPerResponse = _rewardPerResponse;
-        newSurvey.timeEstimate = _timeEstimate;
-        newSurvey.participantsNeeded = _participantsNeeded;
-        newSurvey.participantsCompleted = 0;
-        newSurvey.deadline = block.timestamp + _deadline;
-        newSurvey.description = _description;
-        newSurvey.requirements = _requirements;
-        newSurvey.verified = false;
-        newSurvey.urgent = false;
-        newSurvey.active = true;
-        newSurvey.budget = msg.value;
-        newSurvey.remainingBudget = msg.value;
+        newSurvey.metadata = params.metadata;
+        
+        newSurvey.financials = SurveyFinancials({
+            rewardPerResponse: params.rewardPerResponse,
+            budget: msg.value,
+            remainingBudget: msg.value
+        });
+        
+        newSurvey.stats = SurveyStats({
+            participantsNeeded: params.participantsNeeded,
+            participantsCompleted: 0,
+            deadline: block.timestamp + params.deadline,
+            verified: false,
+            urgent: false,
+            active: true
+        });
 
-        categories[_category].count++;
+        categories[params.metadata.category].count++;
 
-        emit SurveyCreated(surveyId, msg.sender, _title, _rewardPerResponse, _participantsNeeded);
+        emit SurveyCreated(
+            surveyId,
+            msg.sender,
+            params.metadata.title,
+            params.rewardPerResponse,
+            params.participantsNeeded
+        );
     }
 
-    function submitResponse(uint256 _surveyId, string memory _responseHash) 
+    function submitResponse(uint256 _surveyId) 
         external 
         surveyExists(_surveyId) 
         surveyActive(_surveyId) 
@@ -139,23 +166,23 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         require(!survey.respondents[msg.sender], "Already responded");
         
         survey.respondents[msg.sender] = true;
-        survey.participantsCompleted++;
+        survey.stats.participantsCompleted++;
         userResponses[msg.sender].push(_surveyId);
         
         // Update user stats
         UserStats storage stats = userStats[msg.sender];
-        if (block.timestamp - stats.lastResponseTime <= 1 days) {
-            stats.activeStreak++;
+        if (block.timestamp - stats.activity.lastResponseTime <= 1 days) {
+            stats.activity.activeStreak++;
         } else {
-            stats.activeStreak = 1;
+            stats.activity.activeStreak = 1;
         }
-        stats.lastResponseTime = block.timestamp;
+        stats.activity.lastResponseTime = block.timestamp;
 
         emit ResponseSubmitted(_surveyId, msg.sender);
 
         // Auto-close survey if full
-        if (survey.participantsCompleted >= survey.participantsNeeded) {
-            survey.active = false;
+        if (survey.stats.participantsCompleted >= survey.stats.participantsNeeded) {
+            survey.stats.active = false;
             emit SurveyClosed(_surveyId);
         }
     }
@@ -170,7 +197,7 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         require(!survey.approvedResponses[_respondent], "Already approved");
         
         survey.approvedResponses[_respondent] = true;
-        userStats[_respondent].pendingRewards += survey.rewardPerResponse;
+        userStats[_respondent].rewards.pendingRewards += survey.financials.rewardPerResponse;
 
         emit ResponseApproved(_surveyId, _respondent);
     }
@@ -185,8 +212,8 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         require(!survey.approvedResponses[_respondent], "Already approved");
         
         survey.respondents[_respondent] = false;
-        survey.participantsCompleted--;
-        survey.active = true; // Reopen for new responses
+        survey.stats.participantsCompleted--;
+        survey.stats.active = true; // Reopen for new responses
     }
 
     function claimReward(uint256 _surveyId) 
@@ -199,23 +226,23 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         
         require(survey.approvedResponses[msg.sender], "Response not approved");
         require(!survey.claimedRewards[msg.sender], "Reward already claimed");
-        require(survey.remainingBudget >= survey.rewardPerResponse, "Insufficient survey budget");
+        require(survey.financials.remainingBudget >= survey.financials.rewardPerResponse, "Insufficient survey budget");
 
         survey.claimedRewards[msg.sender] = true;
-        survey.remainingBudget -= survey.rewardPerResponse;
+        survey.financials.remainingBudget -= survey.financials.rewardPerResponse;
         
-        stats.totalEarned += survey.rewardPerResponse;
-        stats.surveysCompleted++;
-        stats.pendingRewards -= survey.rewardPerResponse;
+        stats.rewards.totalEarned += survey.financials.rewardPerResponse;
+        stats.activity.surveysCompleted++;
+        stats.rewards.pendingRewards -= survey.financials.rewardPerResponse;
         
         // Update rank based on completed surveys
-        if (stats.surveysCompleted >= 50) stats.rank = "Gold";
-        else if (stats.surveysCompleted >= 25) stats.rank = "Silver";
-        else stats.rank = "Bronze";
+        if (stats.activity.surveysCompleted >= 50) stats.rewards.rank = "Gold";
+        else if (stats.activity.surveysCompleted >= 25) stats.rewards.rank = "Silver";
+        else stats.rewards.rank = "Bronze";
 
-        payable(msg.sender).transfer(survey.rewardPerResponse);
+        payable(msg.sender).transfer(survey.financials.rewardPerResponse);
 
-        emit RewardClaimed(_surveyId, msg.sender, survey.rewardPerResponse);
+        emit RewardClaimed(_surveyId, msg.sender, survey.financials.rewardPerResponse);
     }
 
     function withdrawUnusedBudget(uint256 _surveyId) 
@@ -224,12 +251,12 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
     {
         Survey storage survey = surveys[_surveyId];
         require(msg.sender == survey.creator, "Not survey creator");
-        require(!survey.active || block.timestamp >= survey.deadline, "Survey still active");
+        require(!survey.stats.active || block.timestamp >= survey.stats.deadline, "Survey still active");
         
-        uint256 amount = survey.remainingBudget;
+        uint256 amount = survey.financials.remainingBudget;
         require(amount > 0, "No budget to withdraw");
         
-        survey.remainingBudget = 0;
+        survey.financials.remainingBudget = 0;
         payable(msg.sender).transfer(amount);
     }
 
@@ -238,28 +265,24 @@ contract SurveyMarketplace is Ownable, ReentrancyGuard {
         external 
         view 
         returns (
-            string memory title,
-            string memory category,
+            SurveyMetadata memory metadata,
             uint256 rewardPerResponse,
             uint256 participantsNeeded,
             uint256 participantsCompleted,
             uint256 remainingBudget,
             bool active,
-            bool verified,
-            string[] memory requirements
+            bool verified
         ) 
     {
         Survey storage survey = surveys[_surveyId];
         return (
-            survey.title,
-            survey.category,
-            survey.rewardPerResponse,
-            survey.participantsNeeded,
-            survey.participantsCompleted,
-            survey.remainingBudget,
-            survey.active,
-            survey.verified,
-            survey.requirements
+            survey.metadata,
+            survey.financials.rewardPerResponse,
+            survey.stats.participantsNeeded,
+            survey.stats.participantsCompleted,
+            survey.financials.remainingBudget,
+            survey.stats.active,
+            survey.stats.verified
         );
     }
 

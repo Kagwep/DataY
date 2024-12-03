@@ -7,23 +7,48 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract DataAccessMarketplace is Ownable, ReentrancyGuard {
     uint256 private _currentListingId;
 
+    enum AccessType { 
+        TimeBasedSubscription,
+        PermanentAccess,
+        QueryBased
+    }
+
+    // Break down into smaller, focused structs
+    struct ListingMetadata {
+        string title;
+        string description;
+        string category;
+        string size;
+        string records;
+    }
+
+    struct ListingAccess {
+        string accessEndpoint;
+        AccessType accessType;
+        uint256 accessDuration;
+        uint256 price;
+    }
+
+    struct ListingStats {
+        uint256 rating;
+        uint256 reviews;
+        uint256 lastUpdated;
+        bool verified;
+        bool active;
+    }
+
     struct DataListing {
         uint256 id;
         address provider;
-        string title;
-        string category;
-        uint256 price;
-        string size;
-        string records;
-        bool verified;
-        string description;
-        string accessEndpoint;
-        uint256 lastUpdated;
-        uint256 rating;
-        uint256 reviews;
-        bool active;
-        AccessType accessType;
-        uint256 accessDuration;
+        ListingMetadata metadata;
+        ListingAccess access;
+        ListingStats stats;
+    }
+
+    // Simplified input struct for creating listings
+    struct CreateListingParams {
+        ListingMetadata metadata;
+        ListingAccess access;
     }
 
     struct Category {
@@ -38,12 +63,6 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         uint256 rating;
         string comment;
         uint256 timestamp;
-    }
-
-    enum AccessType { 
-        TimeBasedSubscription,
-        PermanentAccess,
-        QueryBased
     }
 
     // State variables
@@ -62,27 +81,17 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
     event CategoryAdded(string id, string name);
 
     constructor() Ownable(msg.sender) ReentrancyGuard() {
-        // Initialize default categories
         _addCategory("all", "All Data");
         _addCategory("financial", "Financial");
         _addCategory("healthcare", "Healthcare");
         _addCategory("retail", "Retail");
         _addCategory("social", "Social Media");
     }
-    function createListing(
-        string memory _title,
-        string memory _category,
-        uint256 _price,
-        string memory _size,
-        string memory _records,
-        string memory _description,
-        string memory _accessEndpoint,
-        AccessType _accessType,
-        uint256 _accessDuration
-    ) external returns (uint256) {
-        require(bytes(_title).length > 0, "Title cannot be empty");
-        require(categories[_category].active, "Invalid category");
-        require(bytes(_accessEndpoint).length > 0, "Access endpoint required");
+
+    function createListing(CreateListingParams calldata params) external returns (uint256) {
+        require(bytes(params.metadata.title).length > 0, "Title cannot be empty");
+        require(categories[params.metadata.category].active, "Invalid category");
+        require(bytes(params.access.accessEndpoint).length > 0, "Access endpoint required");
 
         _currentListingId++;
         uint256 listingId = _currentListingId;
@@ -90,33 +99,28 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         listings[listingId] = DataListing({
             id: listingId,
             provider: msg.sender,
-            title: _title,
-            category: _category,
-            price: _price,
-            size: _size,
-            records: _records,
-            verified: false,
-            description: _description,
-            accessEndpoint: _accessEndpoint,
-            lastUpdated: block.timestamp,
-            rating: 0,
-            reviews: 0,
-            active: true,
-            accessType: _accessType,
-            accessDuration: _accessDuration
+            metadata: params.metadata,
+            access: params.access,
+            stats: ListingStats({
+                rating: 0,
+                reviews: 0,
+                lastUpdated: block.timestamp,
+                verified: false,
+                active: true
+            })
         });
 
         providerListings[msg.sender].push(listingId);
-        categories[_category].count++;
+        categories[params.metadata.category].count++;
 
-        emit ListingCreated(listingId, msg.sender, _title, _price);
+        emit ListingCreated(listingId, msg.sender, params.metadata.title, params.access.price);
         return listingId;
     }
 
-    function purchaseAccess(uint256 _listingId) external payable nonReentrant {
+function purchaseAccess(uint256 _listingId) external payable nonReentrant {
         DataListing storage listing = listings[_listingId];
-        require(listing.active, "Listing not active");
-        require(msg.value >= listing.price, "Insufficient payment");
+        require(listing.stats.active, "Listing not active");
+        require(msg.value >= listing.access.price, "Insufficient payment");
 
         // Transfer payment to provider
         payable(listing.provider).transfer(msg.value);
@@ -124,7 +128,7 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         // Record purchase
         buyerPurchases[msg.sender].push(_listingId);
 
-        emit PurchaseCompleted(_listingId, msg.sender, listing.price);
+        emit PurchaseCompleted(_listingId, msg.sender, listing.access.price);
     }
 
     function addReview(
@@ -132,7 +136,8 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         uint256 _rating,
         string memory _comment
     ) external {
-        require(listings[_listingId].active, "Listing not active");
+        DataListing storage listing = listings[_listingId];
+        require(listing.stats.active, "Listing not active");
         require(_rating >= 10 && _rating <= 50, "Rating must be between 1.0 and 5.0");
         require(hasPurchased(msg.sender, _listingId), "Must purchase to review");
 
@@ -146,10 +151,9 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         listingReviews[_listingId].push(review);
         
         // Update listing rating
-        DataListing storage listing = listings[_listingId];
-        uint256 totalRating = listing.rating * listing.reviews + _rating;
-        listing.reviews++;
-        listing.rating = totalRating / listing.reviews;
+        uint256 totalRating = listing.stats.rating * listing.stats.reviews + _rating;
+        listing.stats.reviews++;
+        listing.stats.rating = totalRating / listing.stats.reviews;
 
         emit ReviewAdded(_listingId, msg.sender, _rating);
     }
@@ -161,9 +165,9 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
     {
         uint256 count = 0;
         for (uint256 i = 1; i <= _currentListingId; i++) {
-            if (listings[i].active && 
+            if (listings[i].stats.active && 
                 (keccak256(bytes(_category)) == keccak256(bytes("all")) || 
-                keccak256(bytes(listings[i].category)) == keccak256(bytes(_category)))) {
+                keccak256(bytes(listings[i].metadata.category)) == keccak256(bytes(_category)))) {
                 count++;
             }
         }
@@ -171,9 +175,9 @@ contract DataAccessMarketplace is Ownable, ReentrancyGuard {
         DataListing[] memory categoryListings = new DataListing[](count);
         uint256 index = 0;
         for (uint256 i = 1; i <= _currentListingId; i++) {
-            if (listings[i].active && 
+            if (listings[i].stats.active && 
                 (keccak256(bytes(_category)) == keccak256(bytes("all")) || 
-                keccak256(bytes(listings[i].category)) == keccak256(bytes(_category)))) {
+                keccak256(bytes(listings[i].metadata.category)) == keccak256(bytes(_category)))) {
                 categoryListings[index] = listings[i];
                 index++;
             }
